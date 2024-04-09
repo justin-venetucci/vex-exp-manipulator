@@ -7,7 +7,7 @@ brain = Brain()
 
 # Robot configuration code
 brain_inertial = Inertial()
-bicep_motor = Motor(Ports.PORT1, True)
+shoulder = Motor(Ports.PORT1, True)
 limit_switch_lower = Limit(brain.three_wire_port.a)
 encoder_bicep = Encoder(brain.three_wire_port.c)
 ptmr = Potentiometer(brain.three_wire_port.h)
@@ -31,35 +31,47 @@ wait(100, MSEC)
 # Library imports
 from vex import *
 import math
+#import numpy as np
 
 # Begin project code
 
 
 
 def Calibrate():
-    bicep_motor.set_velocity(70, PERCENT)
+    #speed up velocities
+    shoulder.set_velocity(100, PERCENT)
+    elbow.set_velocity(70, PERCENT)
+
+    #angle at which shoulder motor hits limit switch
     calibration_angle = 5
 
-    while(ptmr.angle(DEGREES) < 180): # was 200
+    while(ptmr.angle(DEGREES) < 160): # was 200
         elbow.spin(FORWARD)
     elbow.stop()
 
     while(not limit_switch_lower.pressing()):
-        bicep_motor.spin(FORWARD)
+        shoulder.spin(FORWARD)
         
 
     print("-------- PRESSING ----------")
     encoder_bicep.set_position(calibration_angle,DEGREES)
-    bicep_motor.stop()
-
+    shoulder.stop()
+    
+    #reset velocities
+    shoulder.set_velocity(70, PERCENT)
+    elbow.set_velocity(50, PERCENT)
 
 def forwardKin(shoulderA, elbowA):
-    
+    print("forwardKin called with", shoulderA, ",", elbowA)
+
     shoulderARadians = math.radians(shoulderA)
     x = bicep_length * math.cos(shoulderARadians)
     y = bicep_length * math.sin(shoulderARadians)
 
     elbowLocation = (x,y)
+
+#which direction is theta increasing?
+#where are you measuring your angle 0 from
 
     # forward kinematics
 
@@ -74,13 +86,13 @@ def forwardKin(shoulderA, elbowA):
     print("tip: " + str(tipLocation))
     return tipLocation
 
-
-def goto(shoulderA, elbowA):
+def goto(shoulderA, elbowA, skipSafety):
+    print("goTo called with", shoulderA, ",", elbowA)
     # elbow angles 80 < x < 200
     # shoulder angles 3 < x < 102
     
     # stop motors
-    bicep_motor.stop()
+    shoulder.stop()
     elbow.stop()
 
     # project tip location with forward kinematics
@@ -92,50 +104,63 @@ def goto(shoulderA, elbowA):
     #if((projTipLocation[0] < 10 and projTipLocation[1] > 1) or (projTipLocation[0] > 10 and projTipLocation[1] < 5)): 
 
     # safety checks
-    if((projTipLocation[0] < 10 and projTipLocation[1] < 5) or projTipLocation[1] < 0):
+    if(((projTipLocation[0] < 10 and projTipLocation[1] < 5) or projTipLocation[1] < 0)) and not skipSafety:
         # angles are unsafe to go to
         print("GoTo will hit something")
     else:
         # angles are safe to go to
         print("GoTo validated")
         while encoder_bicep.position(DEGREES) < shoulderA:
-            bicep_motor.spin(REVERSE)
-        bicep_motor.stop()
+            shoulder.spin(REVERSE)
+            wait(0.1,SECONDS)
+            print("enc angle: ", encoder_bicep.position(DEGREES))
+        shoulder.stop()
 
-        while ptmr.angle(DEGREES) > elbowA:
+        while ptmr.angle(DEGREES) + ptmr_offset > elbowA:
             elbow.spin(REVERSE)
+            wait(0.1,SECONDS)
+            print("ptmr angle: ", ptmr.angle(DEGREES) + ptmr_offset )
         elbow.stop()    
 
 
-def invKin(x, y,l1,l2):
-    #side lengths a and b are constant
-    #bicep_length
-    #forearm_length
+def invKin(x, y):
+    print("invKin called with", x, ",", y)
+    #given a desired coordinate pair, calculates the angles
+    #necessary to send the claw to that location
+
+    #side lengths a and b are constant    
+    l1 = bicep_length
+    l2 = forearm_length
 
     ##Solve for theta2
-    theta2_fraction = (x**2 + y**2 - l1**2 - l2**2) / (2 * l1 * l2)
-    theta2 = math.acos(theta2_fraction)
+    cos_theta2 = (x**2 + y**2 - l1**2 - l2**2) / (2 * l1 * l2)
+    theta2 = math.acos(cos_theta2)
+    theta2 = math.degrees(theta2)
 
     ##Solve for theta1
     alpha = math.atan(y / x)
 
     theta1_numerator = l2  * math.sin(theta2)
     theta1_denominator = math.sqrt(x**2 + y**2)
-    theta1_fraction = theta1_denominator / theta1_arcsinFraction
-    theta1_arcsin = math.asin( theta1_fraction )
+    theta1_fraction = theta1_numerator / theta1_denominator
+    theta1 = alpha - math.asin( theta1_fraction )
 
-    theta1 = alpha + theta1_arcsin
+    theta1 = math.degrees(theta1)
 
-    pass
+    print("theta1: ", theta1)
+    print("theta2: ", theta2)
+
+    angles = (theta1, theta2)
+    return angles
 
 #--------------------------------------------------
 #MAIN
 #--------------------------------------------------
 
 # set constants
-encoder_offset = 10
 bicep_length = 9.75
 forearm_length = 10.55
+ptmr_offset = -30 #deg
 wait(0.1,SECONDS)
 
 #claw.set_position(-50,DEGREES) open
@@ -145,31 +170,17 @@ wait(0.1,SECONDS)
 Calibrate()
 
 #safe test
-goto(60, 90)
+#goto(60, 90, True)
+#wait(10, SECONDS)
 
-#unsafe test due to hitting gearbox
-goto(60, 60)
-
-
-#unsafe test due to hitting table
-goto(45, 45)
-
+anglesTuple = invKin(15, 10)
+goto(anglesTuple[0],anglesTuple[1] + 60, True)
+#goto(68, 54, True)
 
 #--------------------------------------------------
-#archive
-
-#print("angle:  " + str(encoder_angle))
-#print("adjusted angle: " + str(encoder_angle + encoder_offset))
-
-#while(True):
-#    current_angle = encoder_bicep.position(DEGREES)
-#    bicep_motor.spin(REVERSE)
-#    print(ptmr.angle(DEGREES))
-#    print(encoder_bicep.position(DEGREES))
-#    wait(0.25,SECONDS)
-#    forwardKin(bicep_length,current_angle + encoder_offset)
     
 
 
 
         
+ 

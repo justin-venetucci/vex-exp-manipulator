@@ -181,32 +181,41 @@ def grab(x, y):
     claw.set_position(100, DEGREES) # open claw
 
     angles = invKin(x+1, y)
-
-    goto(angles[0], angles[1], True)
+    print(dist.object_distance(INCHES))
+    if(dist.object_distance(INCHES) < 12):
+        goto(angles[0], angles[1], True)
+    else:
+        goto(angles[0]+ (dist.object_distance(INCHES)*0.5), angles[1] + (dist.object_distance(INCHES)*2), True)
 
     claw.set_position(-50, DEGREES) # close claw
 
     wait(1, SECONDS)
-    
+
+    # throw can back over the top
+    #goto(90,1,True)
+    while encoder_bicep.position(DEGREES) < 80:
+        shoulder.spin(REVERSE)
+        wait(0.1,SECONDS)
+        print("!enc angle dn: ", encoder_bicep.position(DEGREES))
+    shoulder.stop()
+    wait(3,SECONDS)
+
     # move elbow to top
-    goto(25,1,True)
-    elbow.spin(FORWARD)
-    print("free spin forward")
+    goto(encoder_bicep.position(DEGREES),20,True)
+    #elbow.spin(FORWARD)
+    #print("free spin forward")
     wait(1, SECONDS)
     elbow.stop()
 
-    # throw can back over the top
-    goto(90,1,True)
-    wait(3,SECONDS)
     claw.set_position(100, DEGREES) # open claw
 
     # go back to a neutral position
-    #goto(encoder_bicep.position(DEGREES), 40, True)
-    elbow.spin(REVERSE)
-    print("free spin back")
-    wait(2, SECONDS)
-    elbow.stop()
-    goto(25,45,True)
+    goto(encoder_bicep.position(DEGREES), 40, True)
+    #elbow.spin(REVERSE)
+    #print("free spin back")
+    #wait(5, SECONDS)
+    #elbow.stop()
+    goto(45,45,True)
 
 
 #--------------------------------------------------
@@ -217,6 +226,7 @@ def grab(x, y):
 bicep_length = 10
 forearm_length = 9.5
 ptmr_offset = 20 #deg
+dist_offset = 5 #inches
 wait(0.1,SECONDS)
 
 claw.set_position(100,DEGREES) #open
@@ -234,14 +244,8 @@ while(dist.object_distance(INCHES) < 60):
     brain.play_note(1,2,250)    
     wait(5, SECONDS)
     brain.play_note(1,4,250)
-    print("can location: ", dist.object_distance(INCHES) + 4, " ", 0)
-    grab(dist.object_distance(INCHES) + 4, -3)
+    print("can location: ", dist.object_distance(INCHES) + dist_offset, " ", 0)
+    grab(dist.object_distance(INCHES) + dist_offset, -3)
 
 
 #--------------------------------------------------
-    
-
-
-
-        
- 
